@@ -1,0 +1,56 @@
+name: ytdlp-web
+
+services:
+  updater:
+    build: ./updater
+    image: ytdlp-web-updater:local
+    init: true
+    restart: unless-stopped
+    environment:
+      YTDLP_CHANNEL: ${YTDLP_CHANNEL:-stable}
+      UPDATE_INTERVAL_HOURS: ${UPDATE_INTERVAL_HOURS:-6}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      TZ: ${TZ:-Europe/Paris}
+    volumes:
+      - ytdlp-bin:/opt/yt-dlp
+    healthcheck:
+      test: ["CMD", "test", "-s", "/opt/yt-dlp/bin/yt-dlp"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+
+  web:
+    build: ./web
+    image: ytdlp-web:local
+    init: true
+    restart: unless-stopped
+    depends_on:
+      updater:
+        condition: service_healthy
+    environment:
+#      AUTH_USER: ${AUTH_USER:-user}
+#      AUTH_PASSWORD: ${AUTH_PASSWORD:-password}
+      ALLOW_NO_AUTH: "1"
+      MAX_CONCURRENT_JOBS: ${MAX_CONCURRENT_JOBS:-2}
+      MAX_QUEUED_JOBS: ${MAX_QUEUED_JOBS:-20}
+      MAX_ACTIVE_PER_CLIENT: ${MAX_ACTIVE_PER_CLIENT:-5}
+      MAX_PLAYLIST_ITEMS: ${MAX_PLAYLIST_ITEMS:-1000}
+      RETENTION_HOURS: ${RETENTION_HOURS:-24}
+      JOB_TIMEOUT_MINUTES: ${JOB_TIMEOUT_MINUTES:-180}
+      TZ: ${TZ:-Europe/Paris}
+    volumes:
+      - ytdlp-bin:/opt/yt-dlp:ro
+      - downloads:/downloads
+      - ./config:/config:ro
+    ports:
+      - "0.0.0.0:${WEB_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/healthz',timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  ytdlp-bin:
+  downloads:

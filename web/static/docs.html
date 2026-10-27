@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="robots" content="noindex, nofollow">
+  <title>API, Téléchargeur</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232848B8'/%3E%3Cpath d='M16 7v13m-6-6 6 6 6-6M9 25h14' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;800&display=swap">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/docs.js" defer></script>
+</head>
+<body class="doc">
+  <header class="top">
+    <a class="brand" href="/">Téléchargeur</a>
+    <nav class="top-links">
+      <a href="/docs" aria-current="page">API</a>
+      <a href="/">Retour à l’interface</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Documentation de l’API</h1>
+    <p class="lead">L’interface web s’appuie entièrement sur cette API JSON. Une application tierce, comme un lecteur de musique, peut rechercher sur YouTube, lancer des téléchargements, suivre leur progression et récupérer les fichiers.</p>
+
+    <dl class="facts">
+      <div><dt>URL de base</dt><dd><code class="origin">https://yt-dlp.pentaist.fr</code></dd></div>
+      <div><dt>Format</dt><dd>JSON en entrée et en sortie, UTF-8</dd></div>
+      <div><dt>Authentification</dt><dd>Aucune, chaque client est identifié par un identifiant anonyme</dd></div>
+    </dl>
+
+    <nav class="toc" aria-label="Sommaire">
+      <p class="toc-title">Sommaire</p>
+      <ol>
+        <li><a href="#identification">Identification du client</a></li>
+        <li><a href="#entetes">En-têtes obligatoires</a></li>
+        <li><a href="#demarrage">Démarrage rapide</a></li>
+        <li><a href="#routes">Points d’entrée</a></li>
+        <li><a href="#tache">L’objet tâche</a></li>
+        <li><a href="#statuts">Statuts</a></li>
+        <li><a href="#formats">Formats et qualités</a></li>
+        <li><a href="#erreurs">Erreurs et limites</a></li>
+        <li><a href="#exemples">Exemples complets</a></li>
+      </ol>
+    </nav>
+
+    <section id="identification">
+      <h2>Identification du client</h2>
+      <p>Chaque tâche appartient au client qui l’a créée. Un client ne voit, ne suit, n’annule et ne télécharge que ses propres tâches. Une tâche d’un autre client répond 404, comme si elle n’existait pas.</p>
+      <p>Deux façons de s’identifier :</p>
+      <ul class="plain">
+        <li><strong>En-tête <code>X-Client-Id</code></strong>, recommandé pour une application. Générez une fois une valeur aléatoire de 32 à 128 caractères parmi <code>A-Z a-z 0-9 _ -</code>, conservez-la et envoyez-la à chaque requête. Elle est prioritaire sur le cookie.</li>
+        <li><strong>Cookie <code>ytdlp_client</code></strong>, posé automatiquement par le serveur à la première requête. C’est ce qu’utilise le navigateur. Un client HTTP qui conserve les cookies fonctionne aussi de cette façon.</li>
+      </ul>
+      <p class="callout">Sans en-tête ni cookie, chaque requête est vue comme un nouveau client : une tâche créée sera ensuite introuvable. Traitez l’identifiant comme un secret, car il donne accès aux tâches associées.</p>
+    </section>
+
+    <section id="entetes">
+      <h2>En-têtes obligatoires</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>En-tête</th><th>Quand</th><th>Valeur</th></tr></thead>
+          <tbody>
+            <tr><td><code>X-Requested-With</code></td><td>Toutes les requêtes <code>POST</code> et <code>DELETE</code></td><td><code>fetch</code>, sinon réponse 403</td></tr>
+            <tr><td><code>Content-Type</code></td><td><code>POST /api/jobs</code></td><td><code>application/json</code></td></tr>
+            <tr><td><code>X-Client-Id</code></td><td>Toutes les requêtes, pour une application</td><td>Votre identifiant de client</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="demarrage">
+      <h2>Démarrage rapide</h2>
+      <p>Le cycle complet : rechercher, lancer, suivre, récupérer, nettoyer.</p>
+<pre><code>BASE=<span class="origin">https://yt-dlp.pentaist.fr</span>
+CLIENT=$(openssl rand -hex 24)
+
+curl -s "$BASE/api/search?q=bohemian%20rhapsody&amp;type=songs&amp;limit=3" \
+  -H "X-Client-Id: $CLIENT"
+
+curl -s -X POST "$BASE/api/jobs" \
+  -H "X-Client-Id: $CLIENT" -H "X-Requested-With: fetch" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://music.youtube.com/watch?v=fJ9rUzIMcZQ","format":"mp3","quality":"0","playlist":false}'
+
+curl -s "$BASE/api/jobs/{id}" -H "X-Client-Id: $CLIENT"
+
+curl -OJ "$BASE/api/jobs/{id}/file" -H "X-Client-Id: $CLIENT"
+
+curl -s -X DELETE "$BASE/api/jobs/{id}" \
+  -H "X-Client-Id: $CLIENT" -H "X-Requested-With: fetch"</code></pre>
+    </section>
+
+    <section id="routes">
+      <h2>Points d’entrée</h2>
+
+      <article class="endpoint" id="get-info">
+        <h3><span class="method get">GET</span> <code>/api/info</code></h3>
+        <p>Informations sur le service : version de yt-dlp installée, canal de mise à jour, durée de conservation des fichiers et limites.</p>
+<pre><code>{
+  "ytdlp": {
+    "version": "2026.10.26",
+    "channel": "stable",
+    "repo": "yt-dlp/yt-dlp",
+    "updated_at": "2026-10-27T13:35:02+00:00",
+    "checked_at": "2026-10-27T19:35:04+00:00",
+    "release_url": "https://github.com/yt-dlp/yt-dlp/releases/tag/2026.10.26"
+  },
+  "retention_hours": 24.0,
+  "max_playlist_items": 200,
+  "search_limit": 20
+}</code></pre>
+      </article>
+
+      <article class="endpoint" id="get-search">
+        <h3><span class="method get">GET</span> <code>/api/search</code></h3>
+        <p>Recherche sur YouTube (via yt-dlp) ou sur YouTube Music (via ytmusicapi). Rien n’est téléchargé. Les résultats sont mis en cache 10 minutes côté serveur.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Paramètre</th><th>Obligatoire</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>q</code></td><td>Oui</td><td>Texte recherché, de 2 à 200 caractères</td></tr>
+              <tr><td><code>type</code></td><td>Non</td><td><code>videos</code> (par défaut) et <code>playlists</code> pour YouTube, <code>songs</code> et <code>albums</code> pour YouTube Music</td></tr>
+              <tr><td><code>limit</code></td><td>Non</td><td>Nombre de résultats, de 1 à <code>search_limit</code> (20 par défaut), 10 si absent</td></tr>
+            </tbody>
+          </table>
+        </div>
+<pre><code>{
+  "query": "bohemian rhapsody",
+  "type": "songs",
+  "results": [
+    {
+      "type": "song",
+      "id": "fJ9rUzIMcZQ",
+      "title": "Bohemian Rhapsody",
+      "subtitle": "Queen, A Night at the Opera",
+      "duration": 355,
+      "count": null,
+      "thumbnail": "https://lh3.googleusercontent.com/…",
+      "url": "https://music.youtube.com/watch?v=fJ9rUzIMcZQ",
+      "playlist": false
+    }
+  ]
+}</code></pre>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Champ</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>type</code></td><td><code>video</code>, <code>playlist</code>, <code>song</code> ou <code>album</code></td></tr>
+              <tr><td><code>subtitle</code></td><td>Chaîne pour YouTube ; artistes et album, ou artistes, type et année pour YouTube Music</td></tr>
+              <tr><td><code>duration</code></td><td>Durée en secondes, <code>null</code> pour une playlist ou un album</td></tr>
+              <tr><td><code>count</code></td><td>Nombre d’éléments d’une playlist quand YouTube le fournit, sinon <code>null</code></td></tr>
+              <tr><td><code>url</code>, <code>playlist</code></td><td>À transmettre tels quels à <code>POST /api/jobs</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="endpoint" id="post-jobs">
+        <h3><span class="method post">POST</span> <code>/api/jobs</code></h3>
+        <p>Lance un téléchargement. La réponse arrive immédiatement avec la tâche au statut <code>queued</code> ; le téléchargement se fait en arrière-plan.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Champ JSON</th><th>Obligatoire</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>url</code></td><td>Oui</td><td>Lien <code>http</code> ou <code>https</code> d’une vidéo, d’un titre, d’une playlist ou d’un album, 2048 caractères au maximum. Tout site pris en charge par yt-dlp est accepté.</td></tr>
+              <tr><td><code>format</code></td><td>Oui</td><td>Voir <a href="#formats">Formats et qualités</a></td></tr>
+              <tr><td><code>quality</code></td><td>Non</td><td>Voir <a href="#formats">Formats et qualités</a>. Une valeur invalide est remplacée par la meilleure qualité.</td></tr>
+              <tr><td><code>playlist</code></td><td>Non</td><td><code>true</code> pour télécharger toute la playlist quand le lien en contient une. Par défaut <code>false</code> : seul l’élément visé est téléchargé.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Réponse <code>201</code> avec l’<a href="#tache">objet tâche</a>.</p>
+        <p class="callout">Une playlist ou un album est livré en un seul fichier <code>.zip</code> contenant un fichier par élément, numérotés dans l’ordre (<code>01 - Titre [id].mp3</code>). Si certains éléments échouent, la tâche se termine quand même avec les autres et le champ <code>warning</code> le signale.</p>
+      </article>
+
+      <article class="endpoint" id="get-jobs">
+        <h3><span class="method get">GET</span> <code>/api/jobs</code></h3>
+        <p>Liste les tâches du client, de la plus récente à la plus ancienne. Réponse : un tableau d’<a href="#tache">objets tâche</a>.</p>
+      </article>
+
+      <article class="endpoint" id="get-job">
+        <h3><span class="method get">GET</span> <code>/api/jobs/{id}</code></h3>
+        <p>État d’une tâche. À interroger toutes les 1 à 2 secondes jusqu’à un statut final : <code>done</code>, <code>error</code> ou <code>cancelled</code>.</p>
+      </article>
+
+      <article class="endpoint" id="get-file">
+        <h3><span class="method get">GET</span> <code>/api/jobs/{id}/file</code></h3>
+        <p>Télécharge le fichier d’une tâche au statut <code>done</code>. Le nom est fourni dans l’en-tête <code>Content-Disposition</code> et dans le champ <code>filename</code> de la tâche. Les requêtes partielles (<code>Range</code>) sont prises en charge, ce qui permet de reprendre un transfert interrompu. Le fichier reste disponible jusqu’à la fin du délai de conservation, même après avoir été récupéré.</p>
+      </article>
+
+      <article class="endpoint" id="delete-job">
+        <h3><span class="method delete">DELETE</span> <code>/api/jobs/{id}</code></h3>
+        <p>Sur une tâche en cours (<code>queued</code>, <code>running</code>, <code>processing</code>) : l’annule, supprime les fichiers partiels et répond <code>200</code> avec la tâche au statut <code>cancelled</code>.</p>
+        <p>Sur une tâche terminée : la retire de la liste, supprime son fichier du serveur et répond <code>204</code> sans contenu. Pensez à le faire une fois le fichier récupéré pour libérer de l’espace.</p>
+      </article>
+
+      <article class="endpoint" id="get-health">
+        <h3><span class="method get">GET</span> <code>/healthz</code></h3>
+        <p>Sonde de disponibilité, sans identification. Répond <code>{"ok": true}</code>.</p>
+      </article>
+    </section>
+
+    <section id="tache">
+      <h2>L’objet tâche</h2>
+<pre><code>{
+  "id": "3f2a9c0e5b7d4e1f8a6c2b9d0e4f7a13",
+  "url": "https://www.youtube.com/playlist?list=PL…",
+  "kind": "audio",
+  "fmt": "mp3",
+  "quality": "0",
+  "playlist": true,
+  "status": "running",
+  "progress": 42.5,
+  "title": "Musique 2026",
+  "item": 9,
+  "items": 20,
+  "error": null,
+  "warning": null,
+  "filename": null,
+  "size": null,
+  "created": 1793115222.42
+}</code></pre>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Champ</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>id</code></td><td>Identifiant de la tâche, 32 caractères hexadécimaux</td></tr>
+            <tr><td><code>kind</code></td><td><code>audio</code> ou <code>video</code>, déduit du format</td></tr>
+            <tr><td><code>fmt</code>, <code>quality</code></td><td>Format et qualité retenus</td></tr>
+            <tr><td><code>status</code></td><td>Voir <a href="#statuts">Statuts</a></td></tr>
+            <tr><td><code>progress</code></td><td>Progression globale de 0 à 100. Pour une playlist, elle couvre l’ensemble des éléments.</td></tr>
+            <tr><td><code>title</code></td><td>Titre de la vidéo ou de la playlist ; vaut l’URL tant que le titre n’est pas connu</td></tr>
+            <tr><td><code>item</code>, <code>items</code></td><td>Élément en cours et nombre total d’éléments d’une playlist, sinon <code>null</code> ou 1</td></tr>
+            <tr><td><code>error</code></td><td>Message d’erreur quand le statut est <code>error</code></td></tr>
+            <tr><td><code>warning</code></td><td>Avertissement sur une tâche terminée, par exemple des éléments de playlist manquants</td></tr>
+            <tr><td><code>filename</code>, <code>size</code></td><td>Nom et taille en octets du fichier, renseignés au statut <code>done</code></td></tr>
+            <tr><td><code>created</code></td><td>Date de création, en secondes depuis l’époque Unix</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="statuts">
+      <h2>Statuts</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Statut</th><th>Signification</th><th>Final</th></tr></thead>
+          <tbody>
+            <tr><td><code>queued</code></td><td>En attente d’un emplacement libre sur le serveur</td><td>Non</td></tr>
+            <tr><td><code>running</code></td><td>Téléchargement en cours, <code>progress</code> évolue</td><td>Non</td></tr>
+            <tr><td><code>processing</code></td><td>Conversion, fusion ou création de l’archive. Peut alterner avec <code>running</code> sur une playlist.</td><td>Non</td></tr>
+            <tr><td><code>done</code></td><td>Fichier prêt à être récupéré</td><td>Oui</td></tr>
+            <tr><td><code>error</code></td><td>Échec, détail dans <code>error</code></td><td>Oui</td></tr>
+            <tr><td><code>cancelled</code></td><td>Annulée par le client</td><td>Oui</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="formats">
+      <h2>Formats et qualités</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Type</th><th><code>format</code></th><th><code>quality</code></th></tr></thead>
+          <tbody>
+            <tr><td>Audio</td><td><code>mp3</code>, <code>m4a</code>, <code>opus</code>, <code>ogg</code></td><td><code>0</code> meilleure (par défaut), <code>2</code> haute, <code>5</code> moyenne</td></tr>
+            <tr><td>Audio sans perte</td><td><code>flac</code>, <code>wav</code></td><td>Ignorée, la qualité de la source est conservée</td></tr>
+            <tr><td>Vidéo</td><td><code>mp4</code>, <code>mkv</code>, <code>webm</code></td><td><code>best</code> (par défaut), ou hauteur maximale : <code>2160</code>, <code>1440</code>, <code>1080</code>, <code>720</code>, <code>480</code>, <code>360</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Les fichiers <code>mp3</code> et <code>m4a</code> contiennent les métadonnées (titre, artiste, album quand elles existent) et la pochette. Les autres formats audio contiennent les métadonnées sans pochette. En vidéo, si la hauteur demandée n’existe pas, la plus proche en dessous est utilisée ; le format <code>mp4</code> privilégie H.264 et AAC pour une lecture partout.</p>
+    </section>
+
+    <section id="erreurs">
+      <h2>Erreurs et limites</h2>
+      <p>Les erreurs de l’API renvoient un objet JSON de la forme <code>{"error": "message lisible"}</code>.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Code</th><th>Cas</th></tr></thead>
+          <tbody>
+            <tr><td><code>400</code></td><td>Paramètre invalide : lien, format, texte de recherche ou type de recherche</td></tr>
+            <tr><td><code>403</code></td><td>En-tête <code>X-Requested-With: fetch</code> absent sur un <code>POST</code> ou un <code>DELETE</code></td></tr>
+            <tr><td><code>404</code></td><td>Tâche inexistante, expirée ou appartenant à un autre client ; fichier pas encore prêt</td></tr>
+            <tr><td><code>429</code></td><td>Trop de téléchargements en cours pour ce client ou pour le serveur, ou trop de requêtes</td></tr>
+            <tr><td><code>502</code></td><td>Échec de la recherche côté YouTube</td></tr>
+            <tr><td><code>504</code></td><td>YouTube a mis trop de temps à répondre à une recherche</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Limite</th><th>Valeur par défaut</th></tr></thead>
+          <tbody>
+            <tr><td>Téléchargements en cours par client</td><td>5</td></tr>
+            <tr><td>Téléchargements en cours sur le serveur</td><td>20, dont 2 exécutés en parallèle</td></tr>
+            <tr><td>Éléments par playlist</td><td>200</td></tr>
+            <tr><td>Durée maximale d’une tâche</td><td>3 heures</td></tr>
+            <tr><td>Conservation des fichiers</td><td>24 heures après la fin de la tâche</td></tr>
+            <tr><td>Lancements de téléchargement</td><td>10 par minute et par adresse IP, avec une rafale de 5</td></tr>
+            <tr><td>Autres requêtes</td><td>10 par seconde et par adresse IP, avec une rafale de 40</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="callout">Les tâches sont gardées en mémoire : un redémarrage du service les efface, fichiers compris. Une application doit récupérer les fichiers puis les stocker elle-même plutôt que de pointer durablement vers ce serveur.</p>
+    </section>
+
+    <section id="exemples">
+      <h2>Exemples complets</h2>
+      <h3>Python</h3>
+<pre><code>import time
+import requests
+
+BASE = "<span class="origin">https://yt-dlp.pentaist.fr</span>"
+HEADERS = {"X-Client-Id": "mon-lecteur-7f3c9a1e5d2b8f4a6c0e9d1b", "X-Requested-With": "fetch"}
+
+found = requests.get(f"{BASE}/api/search", params={"q": "daft punk", "type": "songs", "limit": 1},
+                     headers=HEADERS, timeout=60).json()["results"][0]
+
+job = requests.post(f"{BASE}/api/jobs", headers=HEADERS, timeout=30, json={
+    "url": found["url"], "format": "mp3", "quality": "0", "playlist": found["playlist"],
+}).json()
+
+while job["status"] not in ("done", "error", "cancelled"):
+    time.sleep(2)
+    job = requests.get(f"{BASE}/api/jobs/{job['id']}", headers=HEADERS, timeout=30).json()
+    print(f"{job['status']} {job['progress']} %")
+
+if job["status"] == "done":
+    with requests.get(f"{BASE}/api/jobs/{job['id']}/file", headers=HEADERS, stream=True, timeout=60) as r:
+        r.raise_for_status()
+        with open(job["filename"], "wb") as f:
+            for chunk in r.iter_content(1 &lt;&lt; 20):
+                f.write(chunk)
+    requests.delete(f"{BASE}/api/jobs/{job['id']}", headers=HEADERS, timeout=30)
+else:
+    print("Échec :", job["error"])</code></pre>
+
+      <h3>JavaScript</h3>
+<pre><code>const BASE = "<span class="origin">https://yt-dlp.pentaist.fr</span>";
+const HEADERS = { "X-Client-Id": "mon-lecteur-7f3c9a1e5d2b8f4a6c0e9d1b", "X-Requested-With": "fetch" };
+
+async function call(path, options = {}) {
+  const res = await fetch(BASE + path, { ...options, headers: { ...HEADERS, ...options.headers } });
+  if (res.status === 204) return null;
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error);
+  return data;
+}
+
+async function downloadTrack(url, format = "mp3") {
+  let job = await call("/api/jobs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, format, quality: "0", playlist: false }),
+  });
+  while (!["done", "error", "cancelled"].includes(job.status)) {
+    await new Promise((r) =&gt; setTimeout(r, 2000));
+    job = await call(`/api/jobs/${job.id}`);
+  }
+  if (job.status !== "done") throw new Error(job.error || "Téléchargement annulé");
+  const blob = await (await fetch(`${BASE}/api/jobs/${job.id}/file`, { headers: HEADERS })).blob();
+  await call(`/api/jobs/${job.id}`, { method: "DELETE" });
+  return { blob, filename: job.filename };
+}</code></pre>
+      <p class="note">Depuis une page web hébergée sur un autre domaine, le navigateur bloquera ces appels : l’API n’autorise pas les requêtes inter-domaines (CORS). Le code JavaScript ci-dessus convient à une application Node.js, Electron ou mobile, ou à une page servie par ce même domaine.</p>
+    </section>
+  </main>
+
+  <footer class="foot">Documentation générée pour ce serveur. La page <a href="/">Téléchargeur</a> utilise exactement les mêmes points d’entrée.</footer>
+</body>
+</html>

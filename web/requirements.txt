@@ -1,0 +1,10 @@
+flask>=3.1,<4
+gunicorn>=23,<24
+ytmusicapi>=1.10
+brotli
+certifi
+mutagen
+pycryptodomex
+requests
+urllib3
+websockets

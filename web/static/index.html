@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Téléchargeur</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232848B8'/%3E%3Cpath d='M16 7v13m-6-6 6 6 6-6M9 25h14' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;800&display=swap">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/">Téléchargeur</a>
+    <nav class="top-links">
+      <a href="/docs">API</a>
+      <a class="engine" id="engine" href="https://github.com/yt-dlp/yt-dlp" target="_blank" rel="noopener">yt-dlp</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Cherchez ou collez un lien, choisissez le format, récupérez le fichier.</h1>
+
+    <section class="search">
+      <form id="search-form" role="search" autocomplete="off">
+        <label class="field-label" for="q">Rechercher sur YouTube</label>
+        <div class="filters" role="radiogroup" aria-label="Type de résultats">
+          <label class="chip"><input type="radio" name="stype" value="videos" checked><span>Vidéos</span></label>
+          <label class="chip"><input type="radio" name="stype" value="playlists"><span>Playlists</span></label>
+          <label class="chip"><input type="radio" name="stype" value="songs"><span>Titres (YouTube Music)</span></label>
+          <label class="chip"><input type="radio" name="stype" value="albums"><span>Albums (YouTube Music)</span></label>
+        </div>
+        <div class="search-box">
+          <input id="q" type="search" role="combobox" aria-expanded="false" aria-controls="search-panel"
+                 aria-autocomplete="list" autocomplete="off" spellcheck="false"
+                 placeholder="Artiste, titre, album, sujet…" enterkeyhint="search">
+          <div class="search-panel" id="search-panel" hidden>
+            <p class="search-status" id="search-status" aria-live="polite" hidden></p>
+            <ul class="results" id="results"></ul>
+            <p class="panel-hint">Les téléchargements utilisent le format choisi plus bas. ↑ ↓ pour parcourir, Entrée pour utiliser le lien, Échap pour fermer.</p>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <form id="form" novalidate>
+      <label class="field-label" for="url">Ou collez le lien d’une vidéo ou d’une playlist</label>
+      <div class="url-row">
+        <input id="url" name="url" type="url" inputmode="url" autocomplete="off" spellcheck="false"
+               placeholder="https://www.youtube.com/watch?v=…" required>
+        <button type="button" class="ghost" id="paste" hidden>Coller</button>
+      </div>
+
+      <label class="check">
+        <input type="checkbox" id="playlist">
+        <span>Télécharger toute la playlist quand le lien en contient une <small id="pl-limit"></small></span>
+      </label>
+
+      <fieldset class="formats">
+        <legend class="field-label">Format</legend>
+
+        <div class="group">
+          <span class="group-name" id="g-audio">Audio</span>
+          <div class="tiles" role="radiogroup" aria-labelledby="g-audio">
+            <label class="tile"><input type="radio" name="fmt" value="mp3" data-kind="audio" checked><span class="ext">.mp3</span><span class="hint">Lisible partout</span></label>
+            <label class="tile"><input type="radio" name="fmt" value="m4a" data-kind="audio"><span class="ext">.m4a</span><span class="hint">AAC, plus léger</span></label>
+            <label class="tile"><input type="radio" name="fmt" value="opus" data-kind="audio"><span class="ext">.opus</span><span class="hint">Le plus compact</span></label>
+            <label class="tile"><input type="radio" name="fmt" value="ogg" data-kind="audio"><span class="ext">.ogg</span><span class="hint">Vorbis</span></label>
+            <label class="tile"><input type="radio" name="fmt" value="flac" data-kind="audio"><span class="ext">.flac</span><span class="hint">Sans perte</span></label>
+            <label class="tile"><input type="radio" name="fmt" value="wav" data-kind="audio"><span class="ext">.wav</span><span class="hint">Non compressé</span></label>
+          </div>
+        </div>
+
+        <div class="group">
+          <span class="group-name" id="g-video">Vidéo</span>
+          <div class="tiles" role="radiogroup" aria-labelledby="g-video">
+            <label class="tile"><input type="radio" name="fmt" value="mp4" data-kind="video"><span class="ext">.mp4</span><span class="hint">Lisible partout</span></label>
+            <label class="tile"><input type="radio" name="fmt" value="mkv" data-kind="video"><span class="ext">.mkv</span><span class="hint">Garde les codecs d’origine</span></label>
+            <label class="tile"><input type="radio" name="fmt" value="webm" data-kind="video"><span class="ext">.webm</span><span class="hint">Pour le web</span></label>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="quality">
+        <label class="field-label" for="quality">Qualité</label>
+        <select id="quality"></select>
+        <p class="note" id="quality-note"></p>
+      </div>
+
+      <p class="form-error" id="form-error" role="alert"></p>
+      <button type="submit" class="go" id="go">Lancer le téléchargement</button>
+    </form>
+
+    <section class="jobs" aria-labelledby="jobs-title">
+      <h2 id="jobs-title">Vos téléchargements</h2>
+      <p class="empty" id="empty">Aucun téléchargement pour l’instant. Les fichiers prêts restent disponibles <span id="retention">24 h</span>, puis sont supprimés du serveur.</p>
+      <ul id="jobs" aria-live="polite"></ul>
+    </section>
+  </main>
+
+  <footer class="foot" id="foot"></footer>
+</body>
+</html>
